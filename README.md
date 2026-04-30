@@ -14,9 +14,9 @@
 
 ## Executive Summary
 
-A suspected TCP SYN port scan was detected targeting a host system. The attacker attempted to identify open ports by sending multiple SYN packets without completing full TCP handshakes. The activity was confirmed through Wireshark traffic analysis and correlated with Nmap scan behavior.
+> A suspected TCP SYN port scan was detected targeting a host system. The attacker attempted to identify open ports by sending multiple SYN packets without completing full TCP handshakes. The activity was confirmed through Wireshark traffic analysis and correlated with Nmap scan behavior.
 
-This type of activity is commonly associated with the **reconnaissance phase of cyber attacks**, where attackers map exposed services before exploitation.
+> This type of activity is commonly associated with the **reconnaissance phase of cyber attacks**, where attackers map exposed services before exploitation.
 
 ---
 
