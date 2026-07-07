@@ -1,4 +1,4 @@
-# Day 03 – SOC Tier 1 Incident Report: TCP SYN Port Scan Detection
+# SOC Tier 1 Incident Report: TCP SYN Port Scan Detection
 
 ---
 
