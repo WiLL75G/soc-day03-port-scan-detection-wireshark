@@ -1,164 +1,131 @@
-# SOC Tier 1 Incident Report: TCP SYN Port Scan Detection
+# TCP SYN Port Scan Detection with Wireshark
 
----
+Catching a port scan at the packet level, reading TCP flags to separate open ports from closed, and correlating the traffic back to the tool that produced it.
 
-## Incident Summary
+## At a Glance
 
-- **Incident Type:** Network Reconnaissance (TCP SYN Port Scan)
-- **Severity:** Medium
-- **Detection Method:** Wireshark Packet Analysis
-- **Tools Used:** Wireshark, Nmap, Linux Terminal
-- **Status:** Confirmed Recon Activity
+| Field | Detail |
+| --- | --- |
+| Alert Type | Network reconnaissance, TCP SYN scan |
+| Severity | Medium |
+| Detection Method | Wireshark packet capture and flag analysis |
+| Tools Used | Wireshark, Nmap, Linux terminal |
+| Target | 192.168.1.x, lab host |
+| Outcome | Recon confirmed, no exploitation observed |
 
----
+## What Happened
 
-## Executive Summary
+A host was probed across multiple TCP ports. The source sent SYN packets and never completed the three way handshake, which is the signature of a SYN scan: learn what is listening, leave no session behind.
 
-> A suspected TCP SYN port scan was detected targeting a host system. The attacker attempted to identify open ports by sending multiple SYN packets without completing full TCP handshakes. The activity was confirmed through Wireshark traffic analysis and correlated with Nmap scan behavior.
+Reconnaissance is not an incident on its own. It is the step that comes before one. A Tier 1 analyst who can name the scan, list what it found, and confirm nothing followed has closed the ticket properly.
 
-> This type of activity is commonly associated with the **reconnaissance phase of cyber attacks**, where attackers map exposed services before exploitation.
-
----
-
-## Affected Asset
-
-- **Target IP:** 192.168.1.x (lab environment)
-- **Environment:** Simulated network lab
-- **Exposure:** Multiple TCP ports probed
-
----
-
-## Detection Methodology
-
-### 1. Traffic Capture
+## Traffic Capture
 
 ![Wireshark Capture](./screenshots/wireshark_capture.png)
 
-- Captured live network traffic using Wireshark  
-- Monitored interface for inbound connection attempts  
-- Confirmed packet flow between source and target  
+Live traffic was captured on the monitored interface, confirming packet flow between source and target before any filtering was applied.
 
----
+## SYN Scan Identification
 
-### 2. SYN Scan Identification
-
-Filter Applied:
-
-```bash id="synfilter"
+```bash
 tcp.flags.syn == 1 && tcp.flags.ack == 0
-````
+```
 
 ![SYN Scan](./screenshots/syn_scan.png)
 
-* Detected multiple SYN packets across different ports
-* Observed sequential probing behavior
-* Confirmed scanning pattern (no full TCP handshake)
+This filter isolates connection attempts, SYN set and ACK clear, which is the opening packet of a handshake and nothing else.
 
----
+The capture showed a high volume of these across different destination ports, probed in sequence, with no handshake ever completing. One SYN is a connection. Hundreds of SYNs and zero sessions is a scan.
 
-### 3. Open Port Response Analysis
+## Open Port Response Analysis
 
 ![Open Ports](./screenshots/open_ports.png)
 
-* Identified SYN-ACK responses from target system
-* Confirmed open services:
+The target answered some probes with SYN ACK. A SYN ACK means a service is listening.
 
-  * Port 22 (SSH)
-  * Port 80 (HTTP)
-  * Port 443 (HTTPS)
+Confirmed open on the target:
 
----
+Port 22, SSH.
 
-### 4. Closed Port Detection
+Port 80, HTTP.
 
-Filter Applied:
+Port 443, HTTPS.
 
-```bash id="rstfilter"
+This is the attacker's shopping list, and reading it from the victim side means the analyst knows exactly what the attacker now knows.
+
+## Closed Port Detection
+
+```bash
 tcp.flags.reset == 1
 ```
 
 ![RST Packets](./screenshots/rst_packets.png)
 
-* Observed RST responses from target system
-* Confirmed ports that rejected connection attempts
-* Indicated hardened or closed services
+RST responses mark ports that refused the connection. Filtering on the reset flag separates the closed ports from the open ones and confirms the scan was answered honestly by the stack, which is what makes the SYN ACK results trustworthy.
 
----
-
-### 5. Packet-Level Inspection
+## Packet Level Inspection
 
 ![Packet Details](./screenshots/packet_details.png)
 
-* Analyzed TCP header fields:
+TCP header fields were inspected directly rather than trusting the summary view. SYN, ACK, and RST flags were verified per packet, along with source and destination behaviour, confirming the incomplete handshake pattern across the whole capture.
 
-  * SYN flag
-  * ACK flag
-  * RST flag
-* Verified source and destination IP behavior
-* Confirmed incomplete handshake pattern
+## Attack Correlation
 
----
-
-### 6. Attack Correlation (Nmap)
-
-```bash id="nmapscan"
+```bash
 nmap -sS 192.168.1.x
 ```
 
 ![Nmap Scan](./screenshots/nmap_scan.png)
 
-* Performed SYN scan using Nmap
-* Generated traffic observed in Wireshark
-* Validated scan-to-packet correlation
+The scan was run with Nmap in SYN mode and matched against the capture. The tool output and the packet evidence line up, which closes the loop: the traffic in Wireshark is explained, not guessed at.
 
----
+## Indicators Observed
 
-## Indicators of Compromise (IOCs)
+High volume of SYN packets across multiple destination ports.
 
-* High volume of SYN packets across multiple ports
-* No completed TCP 3-way handshake
-* Sequential port probing pattern
-* Presence of RST responses from target system
-* External scanning tool (Nmap) activity detected
+No completed TCP three way handshake.
 
----
+Sequential port probing pattern.
+
+RST responses returned from closed ports.
+
+Traffic pattern consistent with an automated scanning tool.
 
 ## MITRE ATT&CK Mapping
 
-| Tactic           | Technique ID | Description               |
-| ---------------- | ------------ | ------------------------- |
-| Reconnaissance   | T1046        | Network Service Discovery |
-| Network Scanning | T1046        | Port Scanning Activity    |
-
----
+| Tactic | Technique ID | Description |
+| --- | --- | --- |
+| Discovery | T1046 | Network service discovery |
 
 ## Analyst Conclusion
 
-The observed activity confirms a **TCP SYN port scan**, indicating reconnaissance behavior. The attacker attempted to enumerate open services on the target system.
+Activity confirmed as a TCP SYN port scan.
 
-No exploitation occurred; however, the scan indicates pre-attack intelligence gathering.
+The source enumerated listening services on the target and identified SSH, HTTP, and HTTPS as open.
 
----
+No exploitation attempt followed inside the capture window. This is pre attack intelligence gathering, not a breach.
 
-## SOC Analyst Action
+## Recommended Response
 
-* Monitor repeated scan attempts from same IP range
-* Block suspicious IPs if behavior persists
-* Enable IDS/IPS alerts for SYN flood patterns
-* Log and correlate scan activity across network sensors
+Monitor the source IP range for repeat scan activity.
 
----
+Block the source if the behaviour persists.
 
-## Learning Outcome
+Enable IDS alerting on SYN scan patterns so this does not depend on someone watching a packet capture.
 
-This investigation demonstrates the ability to:
+Correlate scan activity across network sensors to see whether this host was the only target.
 
-* Detect port scanning using Wireshark
-* Identify TCP handshake anomalies
-* Correlate attack tools with packet behavior
-* Apply SOC-level reasoning to network traffic
+## What This Lab Demonstrates
 
----
+Capturing and filtering live traffic in Wireshark with purpose, not just recording it.
+
+Reading TCP flags to tell an open port from a closed one at the packet level.
+
+Recognising a scan by handshake behaviour rather than by volume alone.
+
+Correlating attacker tooling with the exact traffic it generates.
+
+Triaging recon activity to a conclusion and mapping it to MITRE ATT&CK.
 
 ## Repository Structure
 
@@ -175,3 +142,6 @@ This investigation demonstrates the ability to:
 ```
 
 ---
+
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-WilliamInCyber-blue?style=flat&logo=linkedin)](https://linkedin.com/in/WilliamInCyber)
+[![X](https://img.shields.io/badge/X-WilliamInCyber-black?style=flat&logo=x)](https://x.com/WilliamInCyber)
